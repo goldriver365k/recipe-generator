@@ -7,25 +7,39 @@
 
 ```bash
 npm install
+cp .env.example .env.local   # OPENAI_API_KEY 값을 채워 넣는다
 npm run dev
 ```
 
 `http://localhost:3000` 에서 확인할 수 있습니다.
 
+## 환경변수
+
+| 변수 | 필수 | 설명 |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | 예 | 샘플 4종에 없는 메뉴명을 AI로 생성할 때 사용. 서버(API route)에서만 사용되며 클라이언트에 노출되지 않는다. |
+| `OPENAI_RECIPE_MODEL` | 아니오 | 사용할 모델 (기본값 `gpt-4o-mini`) |
+
+로컬 개발은 `.env.local`(git에 커밋되지 않음), Netlify 배포는 **Site settings →
+Environment variables**에 동일한 값을 등록하면 된다.
+
 ## 1차 버전 범위
 
 - 입력: 메뉴명, 인원 두 가지만 받습니다.
-- 데이터: DB/로그인 없이, 코드에 내장된 샘플 레시피 4종(제육볶음, 김치찌개, 된장찌개, 불고기)만 지원합니다.
+- 데이터: DB/로그인 없이, 코드에 내장된 샘플 레시피 4종(제육볶음, 김치찌개, 된장찌개, 불고기)은
+  AI를 호출하지 않고 즉시 계산합니다 (비용 절감).
 - 인원수에 따라 재료량/양념량은 비례 계산, 조리시간은 인원수 구간별 보정 배율을 적용해 계산합니다.
-- 샘플 레시피에 없는 메뉴를 입력하면 안내 메시지만 표시합니다. AI 레시피 생성은
-  아직 연결되어 있지 않으며(`src/utils/generateRecipeWithAI.ts`), 구조만 준비되어 있습니다.
+- 샘플에 없는 메뉴명을 입력하면 서버 라우트(`app/api/generate-recipe`)를 통해
+  OpenAI API가 해당 인원수에 맞는 레시피를 생성합니다.
 
 ## 프로젝트 구조
 
 ```text
-app/                 Next.js App Router 진입점 (layout, page)
+app/
+ ├─ page.tsx, layout.tsx      Next.js App Router 진입점
+ └─ api/generate-recipe/route.ts   AI 레시피 생성 서버 라우트 (OpenAI 호출)
 src/
- ├─ App.tsx           최상위 화면 컴포넌트 (입력 ↔ 결과 전환)
+ ├─ App.tsx           최상위 화면 컴포넌트 (입력 ↔ 로딩 ↔ 결과 전환)
  ├─ components/
  │   ├─ RecipeForm.tsx
  │   ├─ RecipeResult.tsx
@@ -37,7 +51,7 @@ src/
  │   ├─ calculateIngredients.ts
  │   ├─ calculateSeasonings.ts
  │   ├─ calculateCookingTime.ts
- │   └─ generateRecipeWithAI.ts   (아직 호출되지 않는 stub)
+ │   └─ generateRecipeWithAI.ts   (/api/generate-recipe 호출 + 응답 변환)
  └─ types/
      └─ recipe.ts
 ```
@@ -51,7 +65,8 @@ src/
 1. [Netlify](https://app.netlify.com) 에 로그인 후 **Add new site → Import an existing project** 선택
 2. GitHub 저장소 `goldriver365/sales-calculator` 선택, 배포 브랜치 지정
 3. 빌드 설정은 `netlify.toml`에서 자동으로 읽힙니다 (Build command: `npm run build`, Publish: `.next`, Next.js 런타임 플러그인 자동 적용)
-4. **Deploy site** 클릭 → 빌드가 끝나면 `https://<사이트이름>.netlify.app` 주소로 접속 가능
+4. **Site settings → Environment variables**에서 `OPENAI_API_KEY`를 등록 (AI 레시피 생성에 필수)
+5. **Deploy site** 클릭 → 빌드가 끝나면 `https://<사이트이름>.netlify.app` 주소로 접속 가능
 
 이후에는 이 브랜치(또는 지정한 배포 브랜치)에 push할 때마다 Netlify가 자동으로
 다시 빌드·배포합니다. 로컬에서 CLI로 배포하려면:

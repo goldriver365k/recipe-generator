@@ -3,56 +3,71 @@
 import { useState } from "react";
 import RecipeForm from "@/components/RecipeForm";
 import RecipeResult from "@/components/RecipeResult";
-import { findSampleRecipe, sampleRecipes } from "@/data/sampleRecipes";
+import { findSampleRecipe } from "@/data/sampleRecipes";
 import { scaleIngredientList } from "@/utils/calculateIngredients";
 import { scaleSeasoningList } from "@/utils/calculateSeasonings";
 import { scaleSteps, calculateTotalTimes } from "@/utils/calculateCookingTime";
+import { generateRecipeWithAI, toScaledRecipe } from "@/utils/generateRecipeWithAI";
 import type { ScaledRecipe } from "@/types/recipe";
 
-export default function App() {
-  const [recipe, setRecipe] = useState<ScaledRecipe | null>(null);
-  const [notFoundMenuName, setNotFoundMenuName] = useState<string | null>(null);
+type Status = "idle" | "loading" | "result" | "error";
 
-  function handleSubmit(menuName: string, servings: number) {
+export default function App() {
+  const [status, setStatus] = useState<Status>("idle");
+  const [recipe, setRecipe] = useState<ScaledRecipe | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  async function handleSubmit(menuName: string, servings: number) {
     const baseRecipe = findSampleRecipe(menuName);
 
-    if (!baseRecipe) {
-      // 1차 버전에서는 AI API를 호출하지 않는다. (작업지시서 6/7번 참고)
-      // 실제 AI 연동은 src/utils/generateRecipeWithAI.ts 를 채우면 된다.
-      setNotFoundMenuName(menuName);
-      setRecipe(null);
+    // 준비된 샘플 레시피가 있으면 AI를 호출하지 않고 바로 계산한다. (비용 절감)
+    if (baseRecipe) {
+      const { totalCookingTimeLabel, totalTimeLabel } = calculateTotalTimes(
+        baseRecipe.steps,
+        servings
+      );
+
+      setRecipe({
+        menuName: baseRecipe.menuName,
+        baseServings: baseRecipe.baseServings,
+        targetServings: servings,
+        ingredients: scaleIngredientList(
+          baseRecipe.ingredients,
+          baseRecipe.baseServings,
+          servings
+        ),
+        seasonings: scaleSeasoningList(
+          baseRecipe.seasonings,
+          baseRecipe.baseServings,
+          servings
+        ),
+        steps: scaleSteps(baseRecipe.steps, servings),
+        totalCookingTimeLabel,
+        totalTimeLabel,
+      });
+      setStatus("result");
       return;
     }
 
-    const { totalCookingTimeLabel, totalTimeLabel } = calculateTotalTimes(
-      baseRecipe.steps,
-      servings
-    );
-
-    setNotFoundMenuName(null);
-    setRecipe({
-      menuName: baseRecipe.menuName,
-      baseServings: baseRecipe.baseServings,
-      targetServings: servings,
-      ingredients: scaleIngredientList(
-        baseRecipe.ingredients,
-        baseRecipe.baseServings,
-        servings
-      ),
-      seasonings: scaleSeasoningList(
-        baseRecipe.seasonings,
-        baseRecipe.baseServings,
-        servings
-      ),
-      steps: scaleSteps(baseRecipe.steps, servings),
-      totalCookingTimeLabel,
-      totalTimeLabel,
-    });
+    // 샘플에 없는 메뉴명은 AI가 생성한다.
+    setStatus("loading");
+    setErrorMessage("");
+    try {
+      const aiRecipe = await generateRecipeWithAI({ menuName, servings });
+      setRecipe(toScaledRecipe(aiRecipe));
+      setStatus("result");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "AI 레시피 생성에 실패했습니다."
+      );
+      setStatus("error");
+    }
   }
 
   function handleReset() {
     setRecipe(null);
-    setNotFoundMenuName(null);
+    setErrorMessage("");
+    setStatus("idle");
   }
 
   return (
@@ -63,7 +78,7 @@ export default function App() {
         </h1>
 
         <div className="rounded-2xl bg-white p-5 shadow-sm">
-          {recipe ? (
+          {status === "result" && recipe && (
             <>
               <RecipeResult recipe={recipe} />
               <button
@@ -74,14 +89,20 @@ export default function App() {
                 다른 메뉴 만들기
               </button>
             </>
-          ) : (
+          )}
+
+          {status === "loading" && (
+            <div className="flex flex-col items-center gap-3 py-10 text-gray-600">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900" />
+              <p className="text-base font-semibold">AI가 레시피를 만들고 있어요...</p>
+            </div>
+          )}
+
+          {(status === "idle" || status === "error") && (
             <>
               <RecipeForm onSubmit={handleSubmit} />
-              {notFoundMenuName && (
-                <p className="mt-4 text-sm text-gray-500">
-                  &ldquo;{notFoundMenuName}&rdquo; 레시피는 아직 준비되어 있지 않아요. 지금은 샘플 메뉴(
-                  {sampleRecipes.map((r) => r.menuName).join(", ")})만 만들 수 있어요.
-                </p>
+              {status === "error" && (
+                <p className="mt-4 text-sm font-medium text-red-600">{errorMessage}</p>
               )}
             </>
           )}

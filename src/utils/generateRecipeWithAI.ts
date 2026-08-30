@@ -1,14 +1,13 @@
-import type { BaseRecipe } from "@/types/recipe";
+import type { ScaledRecipe } from "@/types/recipe";
 
 /**
- * AI 레시피 생성 - 구조만 준비해 둔 자리(stub).
+ * AI 레시피 생성.
  *
- * 작업지시서 6/7번 규칙:
- *  - mock 데이터(sampleRecipes)에 없는 메뉴명을 입력하면 AI가 레시피를
- *    생성할 수 있는 "구조"만 만들어 둔다.
- *  - 개발 중 비용 절감을 위해 이번 1차 작업 범위에서는 실제 AI API를
- *    호출하지 않는다. 화면/계산 로직이 mock 데이터로 먼저 검증된 뒤,
- *    이 함수 내부만 실제 API 호출로 교체하면 된다.
+ * 작업지시서 6번 규칙: mock 데이터(sampleRecipes)에 없는 메뉴명을 입력하면
+ * 이 함수를 통해 AI가 레시피를 생성한다. 실제 AI 호출(OpenAI API)은
+ * 클라이언트에 API 키를 노출하지 않기 위해 서버 라우트
+ * (app/api/generate-recipe/route.ts)에서만 이루어지고, 이 함수는 그 라우트를
+ * fetch로 호출하는 역할만 한다.
  */
 
 /** AI에게 전달하는 최소 입력 데이터 */
@@ -36,18 +35,42 @@ export interface AIRecipeResponse {
   totalTime: string;
 }
 
-/**
- * 실제 AI 호출부.
- * TODO: 이번 1차 작업 범위 이후, 여기에서 실제 AI API를 호출하고
- *       응답을 AIRecipeResponse(JSON)로 파싱하도록 구현한다.
- *
- * 지금은 mock 단계이므로 호출되지 않으며, 호출 시 명시적으로
- * "아직 지원하지 않음" 에러를 던진다.
- */
+/** /api/generate-recipe 를 호출해 AI가 생성한 레시피(JSON)를 받아온다. */
 export async function generateRecipeWithAI(
-  _request: AIRecipeRequest
-): Promise<BaseRecipe> {
-  throw new Error(
-    "AI 레시피 생성은 아직 연결되어 있지 않습니다. (1차 버전은 mock 데이터만 지원)"
-  );
+  request: AIRecipeRequest
+): Promise<AIRecipeResponse> {
+  const response = await fetch("/api/generate-recipe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const message =
+      typeof data?.error === "string" ? data.error : "AI 레시피 생성에 실패했습니다.";
+    throw new Error(message);
+  }
+
+  return data as AIRecipeResponse;
+}
+
+/** AI 응답(JSON)을 화면에 그대로 출력할 수 있는 ScaledRecipe 형태로 변환한다. */
+export function toScaledRecipe(ai: AIRecipeResponse): ScaledRecipe {
+  return {
+    menuName: ai.menuName,
+    baseServings: ai.servings,
+    targetServings: ai.servings,
+    ingredients: ai.ingredients,
+    seasonings: ai.seasonings,
+    steps: ai.steps.map((step) => ({
+      step: step.step,
+      title: step.title,
+      description: step.description,
+      timeLabel: step.time,
+    })),
+    totalCookingTimeLabel: ai.totalCookingTime,
+    totalTimeLabel: ai.totalTime,
+  };
 }
