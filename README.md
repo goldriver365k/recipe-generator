@@ -42,6 +42,27 @@ src/
      └─ recipe.ts
 ```
 
+## 배포 (Netlify)
+
+이 저장소에는 Netlify 배포 설정(`netlify.toml`, `@netlify/plugin-nextjs`)이 이미
+포함되어 있습니다. 실제 배포는 GitHub 저장소를 본인의 Netlify 계정에 연결하기만
+하면 됩니다.
+
+1. [Netlify](https://app.netlify.com) 에 로그인 후 **Add new site → Import an existing project** 선택
+2. GitHub 저장소 `goldriver365/sales-calculator` 선택, 배포 브랜치 지정
+3. 빌드 설정은 `netlify.toml`에서 자동으로 읽힙니다 (Build command: `npm run build`, Publish: `.next`, Next.js 런타임 플러그인 자동 적용)
+4. **Deploy site** 클릭 → 빌드가 끝나면 `https://<사이트이름>.netlify.app` 주소로 접속 가능
+
+이후에는 이 브랜치(또는 지정한 배포 브랜치)에 push할 때마다 Netlify가 자동으로
+다시 빌드·배포합니다. 로컬에서 CLI로 배포하려면:
+
+```bash
+npm install -g netlify-cli
+netlify login
+netlify deploy --build          # 미리보기 배포
+netlify deploy --build --prod   # 프로덕션 배포
+```
+
 ## 계산 규칙
 
 - `calculateIngredientAmount()` / `calculateSeasoningAmount()`: 재료와 양념의 환산
