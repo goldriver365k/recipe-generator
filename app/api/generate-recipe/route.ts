@@ -5,6 +5,10 @@ import type { AIRecipeResponse } from "@/utils/generateRecipeWithAI";
 // (클라이언트에 API 키가 노출되지 않는다.)
 export const runtime = "nodejs";
 
+// 실제 AI 호출이 실패했을 때 사용자에게 그대로 노출하는 문구.
+// (내부 원인은 서버 로그(console.error)에만 남기고, 사용자에게는 이 문구만 보여준다.)
+const GENERIC_API_ERROR_MESSAGE = "레시피 생성 중 오류가 발생했습니다. 다시 시도해주세요.";
+
 const RECIPE_JSON_SCHEMA = {
   name: "recipe",
   strict: true,
@@ -103,10 +107,8 @@ export async function POST(request: NextRequest) {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json(
-      { error: "서버에 OPENAI_API_KEY가 설정되어 있지 않습니다." },
-      { status: 500 }
-    );
+    console.error("generate-recipe route error: OPENAI_API_KEY is not set");
+    return NextResponse.json({ error: GENERIC_API_ERROR_MESSAGE }, { status: 500 });
   }
 
   const baseUrl = process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1";
@@ -138,10 +140,7 @@ export async function POST(request: NextRequest) {
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();
       console.error("OpenAI API error:", openaiResponse.status, errorText);
-      return NextResponse.json(
-        { error: "AI 레시피 생성에 실패했습니다. 잠시 후 다시 시도해 주세요." },
-        { status: 502 }
-      );
+      return NextResponse.json({ error: GENERIC_API_ERROR_MESSAGE }, { status: 502 });
     }
 
     const data = await openaiResponse.json();
@@ -149,10 +148,7 @@ export async function POST(request: NextRequest) {
 
     if (typeof content !== "string") {
       console.error("Unexpected OpenAI response shape:", JSON.stringify(data));
-      return NextResponse.json(
-        { error: "AI 응답을 읽을 수 없습니다." },
-        { status: 502 }
-      );
+      return NextResponse.json({ error: GENERIC_API_ERROR_MESSAGE }, { status: 502 });
     }
 
     let parsed: AIRecipeResponse;
@@ -160,18 +156,12 @@ export async function POST(request: NextRequest) {
       parsed = JSON.parse(content);
     } catch (parseError) {
       console.error("Failed to parse AI response JSON:", parseError, content);
-      return NextResponse.json(
-        { error: "AI 응답 형식이 올바르지 않습니다." },
-        { status: 502 }
-      );
+      return NextResponse.json({ error: GENERIC_API_ERROR_MESSAGE }, { status: 502 });
     }
 
     return NextResponse.json(parsed);
   } catch (error) {
     console.error("generate-recipe route error:", error);
-    return NextResponse.json(
-      { error: "AI 레시피 생성 중 오류가 발생했습니다." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: GENERIC_API_ERROR_MESSAGE }, { status: 500 });
   }
 }
